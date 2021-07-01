@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnection.IceServer
+import org.webrtc.SessionDescription
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -93,35 +94,35 @@ const val ROOM_FULL = "FULL"
  */
 @Keep
 data class RoomParam(
-    val params: Params,
-    val result: String
+        val params: Params,
+        val result: String
 )
 
 @Keep
 data class Params(
-    val bypass_join_confirmation: String,
-    val client_id: String,
-    val error_messages: List<Any>,
-    val header_message: String,
-    val ice_server_transports: String,
-    val ice_server_url: String,
-    val include_loopback_js: String,
-    val is_initiator: Boolean,
-    val is_loopback: String,
-    val media_constraints: String,
-    val messages: List<Any>,
-    val offer_options: String,
-    val pc_config: String,
-    val pc_constraints: String,
-    val room_id: String,
-    val room_link: String,
-    val version_info: String,
-    val warning_messages: List<Any>,
-    val wss_post_url: String,
-    val wss_url: String
-){
+        val bypass_join_confirmation: String,
+        val client_id: String,
+        val error_messages: List<Any>,
+        val header_message: String,
+        val ice_server_transports: String,
+        val ice_server_url: String,
+        val include_loopback_js: String,
+        val is_initiator: Boolean,
+        val is_loopback: String,
+        val media_constraints: String,
+        val messages: List<Any>,
+        val offer_options: String,
+        val pc_config: String,
+        val pc_constraints: String,
+        val room_id: String,
+        val room_link: String,
+        val version_info: String,
+        val warning_messages: List<Any>,
+        val wss_post_url: String,
+        val wss_url: String
+) {
 
-    fun parseIceServices():List<PeerConnection.IceServer>{
+    fun parseIceServices(): List<PeerConnection.IceServer> {
         val list = LinkedList<IceServer>()
         val pc_configJson = JSONObject(pc_config)
         val iceServers = pc_configJson.getString("iceServers")
@@ -130,16 +131,28 @@ data class Params(
             val server: JSONObject = array.getJSONObject(i)
             val urlArray = JSONArray(server.getString("urls"))
             val urlList = ArrayList<String>()
-            for (index in 0 until urlArray.length()){
+            for (index in 0 until urlArray.length()) {
                 urlList.add(urlArray.getString(index))
             }
             val credential = if (server.has("credential")) server.getString("credential") else "123456"
             val userName = if (server.has("username")) server.getString("username") else "flyer"
-            val ice= IceServer.builder(urlList).setPassword(credential).setUsername(userName).createIceServer()
+            val ice = IceServer.builder(urlList).setPassword(credential).setUsername(userName).createIceServer()
             list.add(ice)
 
             Logger.d("ice:${ice.toString()}")
         }
         return list
+    }
+
+    /**
+     * 获取offer的sdp
+     */
+    fun parseSdp(): SessionDescription? {
+        val sdpText = messages.getOrNull(0) as? String
+        sdpText?.let {
+            val sdpJson = JSONObject(sdpText)
+            return SessionDescription(SessionDescription.Type.OFFER,sdpJson.getString("sdp"))
+        }
+        return null
     }
 }

@@ -4,7 +4,6 @@ import com.google.gson.Gson
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONException
 import org.json.JSONObject
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
@@ -29,10 +28,22 @@ object WebSocketClient {
 
     private var socket: WebSocket? = null
 
+
+    var connectRoomListener: ConnectRoomListener? = null
+
+
+    private var hasConnected = false
+    private val msgQue by lazy {
+        ArrayList<String>()
+    }
+
     /**
      * http请求连接房间
      */
     fun connectRoom(url: String, listener: ConnectRoomListener) {
+
+        connectRoomListener = listener
+
         val JSON = "application/json; charset=utf-8".toMediaType()
         val requestBody = "".toRequestBody(JSON)
         val request = Request.Builder().post(requestBody).url(url).build()
@@ -63,9 +74,17 @@ object WebSocketClient {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 super.onOpen(webSocket, response)
+                Logger.d("onOpen")
+                hasConnected = true
                 // 注册
                 registerRoom(roomId, clientId)
-                Logger.d("onOpen")
+
+                // 发送消息队列
+                msgQue.forEach { msg ->
+                    webSocket.send(msg)
+                }
+
+                msgQue.clear()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -91,6 +110,8 @@ object WebSocketClient {
                                 json1.getString("id"), json1.getInt("label"),
                                 json1.getString("candidate")
                         )
+                        connectRoomListener?.onReceiveRemoteIceCandidate(iceCandidate)
+
                     } else if (type == "remove-candidates") {
                         val candidateArray = json1.getJSONArray("candidates")
                         val candidates =
@@ -107,16 +128,15 @@ object WebSocketClient {
 
                     } else if (type == "answer") {
 
+
                         // 被邀请
 //                         if (initiator) {
 ////                        主动发送视频       并且对方同意了    sdp 对方
-//                             val sdp = SessionDescription(
-//                                 SessionDescription.Type.fromCanonicalForm(type),
-//                                 json1.getString("sdp")
-//                             )
-//                             mainActivityInterface.onRemoteDescription(sdp)
-//                         } else {
-//                         }
+                        val sdp = SessionDescription(
+                                SessionDescription.Type.fromCanonicalForm(type),
+                                json1.getString("sdp")
+                        )
+                        connectRoomListener?.onReceiveRemoteDescription(sdp)
                     } else if (type == "offer") {
                         // 邀请
                     } else if (type == "bye") {
@@ -142,20 +162,37 @@ object WebSocketClient {
         json.put("cmd", "register")
         json.put("roomid", roomId)
         json.put("clientid", clientId)
-        sendMsg(json.toString())
+        if (true == socket?.send(json.toString())) {
+            Logger.d("registerRoom-----true")
+        } else {
+            Logger.d("registerRoom-----false")
+        }
     }
 
     /**
      * 使用WebSocket发送消息
      */
     fun sendMsg(msg: String) {
-        socket?.send(msg)
+        val jsonObject = JSONObject()
+        jsonObject.put("cmd", "send")
+        jsonObject.put("msg", msg)
+
+        if (hasConnected) {
+            if (true == socket?.send(jsonObject.toString())) {
+                Logger.d("webSocket----sendMsg-----true")
+            } else {
+                Logger.d("webSocket----sendMsg-----false")
+            }
+        } else {
+            msgQue.add(jsonObject.toString())
+            Logger.d("webSocket----sendMsg-----加入带发送队列")
+        }
     }
 
     /**
      * offerUrl = host/message/roomId/clientId
      */
-    fun sendOffer(offerUrl:String,offerSdp: SessionDescription) {
+    fun sendOffer(offerUrl: String, offerSdp: SessionDescription) {
 
         Logger.d("sendOffer---offerUrl:${offerUrl}")
         val jsonObject = JSONObject()
@@ -183,9 +220,14 @@ object WebSocketClient {
         sendMsg(jsonObject.toString())
     }
 
-
 }
 
 interface ConnectRoomListener {
     fun connectSuccess(param: RoomParam)
+
+    //收到了对方的ICE   socket
+    fun onReceiveRemoteIceCandidate(candidate: IceCandidate?)
+
+    // 收到了对方的sdp
+    fun onReceiveRemoteDescription(sessionDescription: SessionDescription)
 }
