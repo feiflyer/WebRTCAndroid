@@ -2,13 +2,23 @@ package com.fly.webrtcandroid
 
 import android.Manifest
 import android.content.Context
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import com.google.gson.Gson
 import org.webrtc.*
+import org.webrtc.PeerConnection.IceServer
+import org.webrtc.PeerConnection.RTCConfiguration
 import pub.devrel.easypermissions.EasyPermissions
+import java.util.*
+import java.util.concurrent.Executors
 
-class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
+/**
+ * 端对端通话
+ */
+class CallVideoActivity : AppCompatActivity(), ConnectRoomListener {
 
+
+    val HOST_NAME = "https://106.12.128.80"
     val VIDEO_TRACK_ID = "1" //"ARDAMSv0";
 
     val AUDIO_TRACK_ID = "2" //"ARDAMSa0";
@@ -25,6 +35,23 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
         findViewById<SurfaceViewRenderer>(R.id.remote_renderer)
     }
 
+    private val executors by lazy {
+        Executors.newSingleThreadExecutor()
+    }
+
+    private val sdpMediaConstraints by lazy {
+        MediaConstraints().apply {
+//            mandatory.add(
+//                    MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+            mandatory.add(
+                    MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+
+//            optional.add(
+//                    MediaConstraints.KeyValuePair("DtlsSrtpKeyAgreement", "true"))
+        }
+
+    }
+
     //纹理渲染
     private var mSurfaceTextureHelper: SurfaceTextureHelper? = null
 
@@ -32,7 +59,7 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
     private var rootEglBase: EglBase? = null
 
     //用于数据传输
-    private val mPeerConnection: PeerConnection? = null
+    private var mPeerConnection: PeerConnection? = null
     private var mPeerConnectionFactory: PeerConnectionFactory? = null
 
     private var mVideoTrack: VideoTrack? = null
@@ -45,11 +72,43 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
         setContentView(R.layout.activity_call_video)
         requestPermission()
 
-        val url = "https://106.12.128.80/join/120031"
+//        val url = HOST_NAME + "/join/120032"
 //        WebSocketClient.connectRoom(url, this)
-//        WebSocketClient.connectRegister("wss://106.12.128.80:8089/ws","","120031","50477544")
-
+////        WebSocketClient.connectRegister("wss://106.12.128.80:8089/ws","","120031","50477544")
+//
         initRenderView()
+
+        connectSuccess(Gson().fromJson("{\n" +
+                "\"result\": \"SUCCESS\",\n" +
+                "\"params\": {\n" +
+                "\"wss_post_url\": \"https://106.12.128.80:8089\",\n" +
+                "\"media_constraints\": \"{\\\"audio\\\": true, \\\"video\\\": true}\",\n" +
+                "\"is_loopback\": \"false\",\n" +
+                "\"ice_server_transports\": \"\",\n" +
+                "\"bypass_join_confirmation\": \"false\",\n" +
+                "\"offer_options\": \"{}\",\n" +
+                "\"is_initiator\": \"true\",\n" +
+                "\"room_link\": \"http://106.12.128.80/r/120031\",\n" +
+                "\"room_id\": \"120031\",\n" +
+                "\"client_id\": \"50477544\",\n" +
+                "\"header_message\": \"\",\n" +
+                "\"warning_messages\": [\n" +
+                "\n" +
+                "],\n" +
+                "\"pc_config\": \"{\\\"rtcpMuxPolicy\\\": \\\"require\\\", \\\"bundlePolicy\\\": \\\"max-bundle\\\", \\\"iceServers\\\": [{\\\"credential\\\": \\\"123456\\\", \\\"username\\\": \\\"flyer\\\", \\\"urls\\\": [\\\"turn:106.12.128.80:3478?transport=udp\\\", \\\"turn:106.12.128.80:3478?transport=tcp\\\"]}, {\\\"urls\\\": [\\\"stun:106.12.128.80:3478\\\"]}]}\",\n" +
+                "\"version_info\": \"{\\\"gitHash\\\": \\\"78600dbe205774c115cf481a091387d928c99d6a\\\", \\\"time\\\": \\\"Wed Sep 23 12:49:00 2020 +0200\\\", \\\"branch\\\": \\\"master\\\"}\",\n" +
+                "\"ice_server_url\": \"https://106.12.128.80/v1alpha/iceconfig?key=\",\n" +
+                "\"wss_url\": \"wss://106.12.128.80:8089/ws\",\n" +
+                "\"messages\": [\n" +
+                "\n" +
+                "],\n" +
+                "\"error_messages\": [\n" +
+                "\n" +
+                "],\n" +
+                "\"include_loopback_js\": \"\",\n" +
+                "\"pc_constraints\": \"{\\\"optional\\\": []}\"\n" +
+                "}\n" +
+                "}", RoomParam::class.java))
     }
 
     /**
@@ -61,8 +120,8 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
             // Already have permission, do the thing
         } else {
             EasyPermissions.requestPermissions(
-                this, "请求录像及麦克风权限",
-                100, *perms
+                    this, "请求录像及麦克风权限",
+                    100, *perms
             )
         }
     }
@@ -90,25 +149,25 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
         mVideoCapture = createVideoCapture()
 
         mSurfaceTextureHelper =
-            SurfaceTextureHelper.create("CaptureThread", rootEglBase?.eglBaseContext)
-        val videoSource = mPeerConnectionFactory!!.createVideoSource(false)
+                SurfaceTextureHelper.create("CaptureThread", rootEglBase?.eglBaseContext)
+        val videoSource = mPeerConnectionFactory!!.createVideoSource(true)
         mVideoCapture?.initialize(
-            mSurfaceTextureHelper,
-            applicationContext,
-            videoSource.capturerObserver
+                mSurfaceTextureHelper,
+                applicationContext,
+                videoSource.capturerObserver
         )
 
         mVideoTrack = mPeerConnectionFactory!!.createVideoTrack(VIDEO_TRACK_ID,
-            videoSource
+                videoSource
         )
         mVideoTrack?.setEnabled(true)
         mVideoTrack?.addSink(local_renderer)
 
         val audioSource =
-            mPeerConnectionFactory!!.createAudioSource(MediaConstraints())
+                mPeerConnectionFactory!!.createAudioSource(MediaConstraints())
         mAudioTrack = mPeerConnectionFactory!!.createAudioTrack(
-            AUDIO_TRACK_ID,
-            audioSource
+                AUDIO_TRACK_ID,
+                audioSource
         )
         mAudioTrack?.setEnabled(true)
     }
@@ -117,31 +176,37 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
         super.onResume()
         // 开启摄像头预览
         mVideoCapture?.startCapture(
-            VIDEO_RESOLUTION_WIDTH,
-            VIDEO_RESOLUTION_HEIGHT,
-            VIDEO_FPS
+                VIDEO_RESOLUTION_WIDTH,
+                VIDEO_RESOLUTION_HEIGHT,
+                24
         )
     }
 
     private fun createPeerConnectionFactory(context: Context?): PeerConnectionFactory? {
+
         val encoderFactory: VideoEncoderFactory
         val decoderFactory: VideoDecoderFactory
+
         encoderFactory = DefaultVideoEncoderFactory(
             rootEglBase?.eglBaseContext,
             false /* enableIntelVp8Encoder */,
             true
         )
         decoderFactory = DefaultVideoDecoderFactory(rootEglBase?.eglBaseContext)
+
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
                 .setEnableInternalTracer(true)
                 .createInitializationOptions()
         )
+
         val builder = PeerConnectionFactory.builder()
             .setVideoEncoderFactory(encoderFactory)
             .setVideoDecoderFactory(decoderFactory)
         builder.setOptions(null)
+
         return builder.createPeerConnectionFactory()
+
     }
 
     /*
@@ -183,28 +248,216 @@ class CallVideoActivity : AppCompatActivity(),ConnectRoomListener {
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
+            requestCode: Int,
+            permissions: Array<out String>,
+            grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this)
     }
 
+
+    private fun createPeerConnection(iceServers: List<IceServer>) {
+        if (null == mPeerConnection) {
+            val iceServers = LinkedList<IceServer>()
+
+            val ice_server = IceServer.builder("turn:xxxx:3478")
+                .setPassword("xxx")
+                .setUsername("xxx")
+                .createIceServer()
+
+            iceServers.add(ice_server)
+
+            val rtcConfig = RTCConfiguration(iceServers)
+            // TCP candidates are only useful when connecting to a server that supports
+            // ICE-TCP.
+            // TCP candidates are only useful when connecting to a server that supports
+            // ICE-TCP.
+            rtcConfig.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED
+            //rtcConfig.bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE;
+            //rtcConfig.rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE;
+            //rtcConfig.bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE;
+            //rtcConfig.rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE;
+            rtcConfig.continualGatheringPolicy =
+                PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            // Use ECDSA encryption.
+            //rtcConfig.keyType = PeerConnection.KeyType.ECDSA;
+            // Enable DTLS for normal calls and disable for loopback calls.
+            // Use ECDSA encryption.
+            //rtcConfig.keyType = PeerConnection.KeyType.ECDSA;
+            // Enable DTLS for normal calls and disable for loopback calls.
+            rtcConfig.enableDtlsSrtp = true
+            //rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
+
+            mPeerConnection = mPeerConnectionFactory?.createPeerConnection(rtcConfig,
+                    object : PeerConnection.Observer {
+                        override fun onIceCandidate(p0: IceCandidate?) {
+
+                        }
+
+                        override fun onDataChannel(p0: DataChannel?) {
+
+                        }
+
+                        override fun onIceConnectionReceivingChange(p0: Boolean) {
+
+                        }
+
+                        override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {
+
+                        }
+
+                        override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {
+
+                        }
+
+                        override fun onAddStream(p0: MediaStream?) {
+
+                        }
+
+                        override fun onSignalingChange(p0: PeerConnection.SignalingState?) {
+
+                        }
+
+                        override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {
+
+                        }
+
+                        override fun onRemoveStream(p0: MediaStream?) {
+
+                        }
+
+                        override fun onRenegotiationNeeded() {
+
+                        }
+
+                        override fun onAddTrack(p0: RtpReceiver?, p1: Array<out MediaStream>?) {
+
+                        }
+
+                    })
+
+            val mediaStreamLabels =
+                listOf("ARDAMS")
+
+            mPeerConnection?.addTrack(mVideoTrack,mediaStreamLabels)
+            mPeerConnection?.addTrack(mAudioTrack,mediaStreamLabels)
+        }
+    }
+
+
+    /**
+     * 创建offer
+     */
+    private fun createOffer(roomParam: RoomParam) {
+        executors.execute {
+            createPeerConnection(roomParam.params.parseIceServices())
+            mPeerConnection?.createOffer(object : SdpObserver {
+                override fun onSetFailure(p0: String?) {
+                    Logger.d("createOffer----onSetFailure")
+                }
+
+                override fun onSetSuccess() {
+                    Logger.d("createOffer----onSetSuccess")
+                }
+
+                override fun onCreateSuccess(sessionDescription: SessionDescription?) {
+                    Logger.d("createOffer----onCreateSuccess:${sessionDescription?.description}")
+
+                    mPeerConnection?.setLocalDescription(object : SdpObserver {
+                        override fun onSetFailure(p0: String?) {
+                            Logger.d("setLocalDescription----onSetFailure:${p0}")
+                        }
+
+                        override fun onSetSuccess() {
+                            Logger.d("setLocalDescription----onSetSuccess")
+                            // 设置成功，需要发送信令告诉服务器
+                            WebSocketClient.sendOffer(HOST_NAME + "/message/" + roomParam.params.room_id + "/" + roomParam.params.client_id, sessionDescription!!)
+                        }
+
+                        override fun onCreateSuccess(p0: SessionDescription?) {
+
+                        }
+
+                        override fun onCreateFailure(p0: String?) {
+
+                        }
+
+                    }, sessionDescription)
+                }
+
+                override fun onCreateFailure(p0: String?) {
+                    Logger.d("createOffer----onCreateFailure")
+                }
+
+            }, sdpMediaConstraints)
+        }
+    }
+
+    /**
+     * 创建answer
+     */
+    private fun createAnswer(roomParam: RoomParam) {
+
+        executors.execute {
+            createPeerConnection(roomParam.params.parseIceServices())
+            mPeerConnection?.createAnswer(object : SdpObserver {
+                override fun onSetFailure(p0: String?) {
+                    Logger.d("createAnswer----onSetFailure")
+                }
+
+                override fun onSetSuccess() {
+                    Logger.d("createAnswer----onSetSuccess")
+                }
+
+                override fun onCreateSuccess(sessionDescription: SessionDescription?) {
+                    Logger.d("createAnswer----onCreateSuccess")
+                    mPeerConnection?.setLocalDescription(object : SdpObserver {
+                        override fun onSetFailure(p0: String?) {
+                            Logger.d("setLocalDescription----onSetFailure:${p0}")
+                        }
+
+                        override fun onSetSuccess() {
+                            Logger.d("setLocalDescription----onSetSuccess")
+                            // 设置成功，需要发送信令告诉服务器
+                            WebSocketClient.sendAnswer(sessionDescription!!)
+                        }
+
+                        override fun onCreateSuccess(p0: SessionDescription?) {
+
+                        }
+
+                        override fun onCreateFailure(p0: String?) {
+
+                        }
+
+                    }, sessionDescription)
+                }
+
+                override fun onCreateFailure(p0: String?) {
+                    Logger.d("createAnswer----onCreateFailure:${p0}")
+                }
+
+            }, sdpMediaConstraints)
+        }
+    }
+
     override fun connectSuccess(roomParam: RoomParam) {
         if (roomParam.result == ROOM_SUCCESS) {
             WebSocketClient.connectRegister(
-                roomParam.params.wss_url,
-                roomParam.params.room_id,
-                roomParam.params.client_id
+                    roomParam.params.wss_url,
+                    roomParam.params.room_id,
+                    roomParam.params.client_id
             )
             // 连接webSocket并注册房间id和clientid，等待有人上线时通知
             if (roomParam.params.is_initiator) {
                 // 是否是主叫，是主叫则创建offer
                 Logger.d("主叫")
+                createOffer(roomParam)
             } else {
                 // 被叫则创建answer
                 Logger.d("被叫")
+                createAnswer(roomParam)
             }
         }
     }

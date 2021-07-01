@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
      * 动态获取权限
      */
     private fun requestPermission() {
-        val perms = arrayOf<String>(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        val perms = arrayOf<String>(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO,Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (EasyPermissions.hasPermissions(this, *perms)) {
             // Already have permission, do the thing
         } else {

@@ -1,6 +1,12 @@
 package com.fly.webrtcandroid
 
 import androidx.annotation.Keep
+import org.json.JSONArray
+import org.json.JSONObject
+import org.webrtc.PeerConnection
+import org.webrtc.PeerConnection.IceServer
+import java.util.*
+import kotlin.collections.ArrayList
 
 // 加入房间成功
 const val ROOM_SUCCESS = "SUCCESS"
@@ -9,6 +15,9 @@ const val ROOM_SUCCESS = "SUCCESS"
 const val ROOM_FULL = "FULL"
 
 /**
+ *
+ *
+ * 主叫
  *
  *
  * {
@@ -44,6 +53,44 @@ const val ROOM_FULL = "FULL"
 }
 
  */
+
+
+/**
+ *
+ *被叫
+ *{
+"params":{
+"bypass_join_confirmation":"false",
+"client_id":"51379142",
+"error_messages":[
+
+],
+"header_message":"",
+"ice_server_transports":"",
+"ice_server_url":"https://106.12.128.80/v1alpha/iceconfig?key\u003d",
+"include_loopback_js":"",
+"is_initiator":false,
+"is_loopback":"false",
+"media_constraints":"{\"audio\": true, \"video\": true}",
+"messages":[
+
+],
+"offer_options":"{}",
+"pc_config":"{\"rtcpMuxPolicy\": \"require\", \"bundlePolicy\": \"max-bundle\", \"iceServers\": [{\"credential\": \"123456\", \"username\": \"flyer\", \"urls\": [\"turn:106.12.128.80:3478?transport\u003dudp\", \"turn:106.12.128.80:3478?transport\u003dtcp\"]}, {\"urls\": [\"stun:106.12.128.80:3478\"]}]}",
+"pc_constraints":"{\"optional\": []}",
+"room_id":"120032",
+"room_link":"http://106.12.128.80/r/120032",
+"version_info":"{\"gitHash\": \"78600dbe205774c115cf481a091387d928c99d6a\", \"time\": \"Wed Sep 23 12:49:00 2020 +0200\", \"branch\": \"master\"}",
+"warning_messages":[
+
+],
+"wss_post_url":"https://106.12.128.80:8089",
+"wss_url":"wss://106.12.128.80:8089/ws"
+},
+"result":"SUCCESS"
+}
+ *
+ */
 @Keep
 data class RoomParam(
     val params: Params,
@@ -72,4 +119,27 @@ data class Params(
     val warning_messages: List<Any>,
     val wss_post_url: String,
     val wss_url: String
-)
+){
+
+    fun parseIceServices():List<PeerConnection.IceServer>{
+        val list = LinkedList<IceServer>()
+        val pc_configJson = JSONObject(pc_config)
+        val iceServers = pc_configJson.getString("iceServers")
+        val array = JSONArray(iceServers)
+        for (i in 0 until array.length()) {
+            val server: JSONObject = array.getJSONObject(i)
+            val urlArray = JSONArray(server.getString("urls"))
+            val urlList = ArrayList<String>()
+            for (index in 0 until urlArray.length()){
+                urlList.add(urlArray.getString(index))
+            }
+            val credential = if (server.has("credential")) server.getString("credential") else "123456"
+            val userName = if (server.has("username")) server.getString("username") else "flyer"
+            val ice= IceServer.builder(urlList).setPassword(credential).setUsername(userName).createIceServer()
+            list.add(ice)
+
+            Logger.d("ice:${ice.toString()}")
+        }
+        return list
+    }
+}

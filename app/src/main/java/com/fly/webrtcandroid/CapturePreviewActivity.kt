@@ -50,8 +50,10 @@ class CapturePreviewActivity : AppCompatActivity() {
 
         mVideoCapture = createVideoCapture()
 
+        // 初始化
         mSurfaceTextureHelper =
             SurfaceTextureHelper.create("CaptureThread", rootEglBase?.eglBaseContext)
+        // 创建VideoSource
         val videoSource = mPeerConnectionFactory!!.createVideoSource(false)
         mVideoCapture?.initialize(
             mSurfaceTextureHelper,
@@ -67,6 +69,9 @@ class CapturePreviewActivity : AppCompatActivity() {
 
     }
 
+    /**
+     * 创建PeerConnectionFactory
+     */
     private fun createPeerConnectionFactory(context: Context?): PeerConnectionFactory? {
         val encoderFactory: VideoEncoderFactory
         val decoderFactory: VideoDecoderFactory
@@ -128,6 +133,11 @@ class CapturePreviewActivity : AppCompatActivity() {
             VIDEO_RESOLUTION_HEIGHT,
             VIDEO_FPS
         )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        mVideoCapture?.stopCapture()
     }
 
 }
