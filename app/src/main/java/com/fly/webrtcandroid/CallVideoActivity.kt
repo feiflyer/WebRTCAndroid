@@ -139,7 +139,7 @@ class CallVideoActivity : AppCompatActivity(), ConnectRoomListener {
 
         initRenderView()
 
-        val url = HOST_NAME + "/join/120022"
+        val url = HOST_NAME + "/join/120023"
         WebSocketClient.connectRoom(url, this)
 //        WebSocketClient.connectRegister("wss://106.12.128.80:8089/ws","","120031","50477544")
 
